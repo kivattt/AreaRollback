@@ -1,0 +1,23 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io/' }
+    }
+    dependencies {
+        classpath('com.github.Fox2Code.FoxLoader:dev:1.2.38')
+    }
+}
+
+apply plugin: 'foxloader.dev'
+
+version '0.0.1'
+
+foxloader {
+    // forceReload = true
+    modId = "arearollback"
+    modName = "AreaRollback"
+    modVersion = project.version
+    modDesc = "Rollback selected area with wooden axe"
+    modWebsite = "https://github.com/kivattt/arearollback"
+    serverMod = "com.kiva.arearollback.AreaRollbackServer"
+}
