@@ -5,14 +5,6 @@ import java.util.Objects;
 public class Coordinate {
     public int x, y, z;
 
-    public Coordinate() {}
-
-    public Coordinate(final int newX, final int newY, final int newZ) {
-        x = newX;
-        y = newY;
-        z = newZ;
-    }
-
     @Override
     public String toString() {
         return "x:" + x + ", y:" + y + ", z:" + z;

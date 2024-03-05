@@ -4,13 +4,14 @@ import com.fox2code.foxloader.loader.ServerMod;
 import com.fox2code.foxloader.network.ChatColors;
 import com.fox2code.foxloader.network.NetworkPlayer;
 import com.fox2code.foxloader.registry.CommandCompat;
-import com.kiva.arearollback.AreaRollbackServer;
-import com.kiva.arearollback.BackupFilenames;
-import com.kiva.arearollback.GetChunkFromWorldFolder;
+import com.kiva.arearollback.*;
 import net.minecraft.src.game.block.tileentity.TileEntity;
 import net.minecraft.src.game.level.chunk.Chunk;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -31,6 +32,11 @@ public class Rollback extends CommandCompat {
     public void onExecute(String[] args, NetworkPlayer commandExecutor) {
         NetworkPlayer.NetworkPlayerController netPlayerController = commandExecutor.getNetworkPlayerController();
 
+        if (!AreaRollbackServer.configLoadedSuccessfully) {
+            commandExecutor.displayChatMessage(ChatColors.RED + "Invalid config, check server console");
+            return;
+        }
+
         if (!netPlayerController.hasSelection()){
             commandExecutor.displayChatMessage(ChatColors.RED + "No area selected!");
             commandExecutor.displayChatMessage(ChatColors.RED + "Mark the corners of the area with");
@@ -41,7 +47,7 @@ public class Rollback extends CommandCompat {
         BackupFilenames backups = getBackupsNames();
         if (backups.folders.isEmpty() && backups.zipFiles.isEmpty()) {
             commandExecutor.displayChatMessage(ChatColors.RED + "No backups available!");
-            commandExecutor.displayChatMessage(ChatColors.YELLOW + "Did you set backups-dir correctly in config.txt?");
+            commandExecutor.displayChatMessage(ChatColors.YELLOW + "Did you set " + Config.backupsDirKeyName + " correctly in config.txt?");
             return;
         }
 
@@ -51,15 +57,20 @@ public class Rollback extends CommandCompat {
                 commandExecutor.displayChatMessage(folder);
 
             for (String zipFile : backups.zipFiles)
-                commandExecutor.displayChatMessage(ChatColors.DARK_RED + zipFile);
+                commandExecutor.displayChatMessage(ChatColors.BLUE + zipFile);
 
-            commandExecutor.displayChatMessage(ChatColors.GREEN + "Type /rollback <backup> to roll back!");
+            commandExecutor.displayChatMessage(ChatColors.GREEN + "Type /rollback <backup> to roll back");
 
             return;
         }
 
         if (args.length == 2) {
             String backupSelected = args[1];
+            if (backupSelected.isEmpty()) {
+                commandExecutor.displayChatMessage(ChatColors.RED + "You can't use an empty backup name");
+                commandExecutor.displayChatMessage(ChatColors.RED + "(You probably typed 2 spaces in the command)");
+                return;
+            }
 
             if (!backups.folders.contains(backupSelected) && !backups.zipFiles.contains(backupSelected)) {
                 commandExecutor.displayChatMessage(ChatColors.RED + "That backup does not exist!");
@@ -67,16 +78,27 @@ public class Rollback extends CommandCompat {
                 return;
             }
 
+            ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rolling back" + (AreaRollbackServer.flipDimensionForRollbacks ? " (dimension flipped)" : "") + " this halts the server until finished");
+            commandExecutor.displayChatMessage(ChatColors.GREEN + "Rolling back " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "...");
 
             long start = System.currentTimeMillis();
-            boolean backupMissingSomeChunk = doRollback(backupSelected, netPlayerController, ServerMod.toEntityPlayerMP(commandExecutor).dimension);
+            boolean backupMissingSomeChunk;
+            try {
+                backupMissingSomeChunk = doRollback(backupSelected, netPlayerController, ServerMod.toEntityPlayerMP(commandExecutor).dimension);
+            } catch (IOException e) {
+                commandExecutor.displayChatMessage(ChatColors.RED + "Failed to create or delete temporary folder for unzipping files");
+                return;
+            }
             long end = System.currentTimeMillis();
             long duration = end - start;
 
-            if (backupMissingSomeChunk)
-                commandExecutor.displayChatMessage(ChatColors.YELLOW + "Some chunks not found in the backup were untouched");
+            ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? "(dimension flipped) " : "") + "performed in " + duration + " milliseconds");
+            commandExecutor.displayChatMessage(ChatColors.GREEN + "Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "performed in " + ChatColors.RESET + duration + ChatColors.GREEN + " milliseconds");
 
-            commandExecutor.displayChatMessage(ChatColors.GREEN + "Rollback performed in " + ChatColors.RESET + duration + ChatColors.GREEN + " milliseconds");
+            if (backupMissingSomeChunk)
+                commandExecutor.displayChatMessage(ChatColors.RED + "Some chunks not found in the backup were untouched");
+
+            commandExecutor.displayChatMessage(ChatColors.YELLOW + "Re-join the server to see the changes!");
 
             return;
         }
@@ -84,7 +106,6 @@ public class Rollback extends CommandCompat {
         commandExecutor.displayChatMessage(commandSyntax());
     }
 
-    // Returns: Folders       Zip files
     public BackupFilenames getBackupsNames() {
         File file = new File(AreaRollbackServer.config.backupsDir);
         String[] folders = file.list((dir, name) -> new File(dir, name).isDirectory());
@@ -96,51 +117,79 @@ public class Rollback extends CommandCompat {
 
         List<String> foldersList = new ArrayList<>();
         List<String> zipFilesList = new ArrayList<>();
-
         if (folders != null) foldersList = Arrays.asList(folders);
         if (zipFiles != null) zipFilesList = Arrays.asList(zipFiles);
 
         return new BackupFilenames(foldersList, zipFilesList);
     }
 
-    // Probably really slow, should pre-load all the chunks needed then setblock based on indexing them instead of this
-    boolean doRollback(String backupSelected, NetworkPlayer.NetworkPlayerController npc, int dimension) {
+    public static boolean doRollback(String backupSelected, NetworkPlayer.NetworkPlayerController npc, int dimension) throws IOException {
         GetChunkFromWorldFolder getChunkFromWorldFolder = new GetChunkFromWorldFolder();
 
-        Path regionDir = Paths.get(AreaRollbackServer.config.backupsDir + "/" + backupSelected);
+        Path regionDirPath = Paths.get(AreaRollbackServer.config.backupsDir + "/" + backupSelected);
+        File regionDir = regionDirPath.normalize().toFile();
+
+        Path tmpFolderName = Paths.get(AreaRollbackServer.config.temporaryDirForUnzippedFiles);
+
+        boolean isZipFile = regionDir.isFile() && regionDir.getName().endsWith(".zip");
+        if (isZipFile) {
+            try {
+                Files.createDirectory(tmpFolderName);
+            } catch (IOException e) {
+                if (e instanceof FileAlreadyExistsException) {
+                    // This should only happen if the server was killed before we had the chance to delete the temp folder
+                    try {
+                        DeleteDirectory.deleteDirectory(tmpFolderName);
+                    } catch(IOException ee) {
+                        ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + "Failed to delete directory: " + tmpFolderName);
+                        throw ee;
+                    }
+                } else {
+                    ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + "Failed to create directory: " + tmpFolderName);
+                    throw e;
+                }
+            }
+        }
 
         boolean backupMissingSomeChunk = false;
 
+        // TODO: If we only get a new chunk when necessary in this loop, we don't have to cache them in getChunkFromRegionFolder()
         for (int x = npc.getMinX(); x <= npc.getMaxX(); x++) {
             for (int y = npc.getMinY(); y <= npc.getMaxY(); y++) {
                 for (int z = npc.getMinZ(); z <= npc.getMaxZ(); z++) {
-                    Chunk chunk = getChunkFromWorldFolder.getChunkFromRegionFolder(dimension, regionDir.normalize().toFile(), x >> 4, y >> 4, z >> 4);
+                    int dimensionToCopyFrom = dimension;
+                    if (AreaRollbackServer.flipDimensionForRollbacks)
+                        dimensionToCopyFrom = dimension == 0 ? -1 : 0;
+
+                    Chunk chunk = getChunkFromWorldFolder.getChunkFromRegionFolder(dimensionToCopyFrom, false, regionDir, isZipFile, x >> 4, y >> 4, z >> 4);
 
                     if (chunk == null) {
                         backupMissingSomeChunk = true;
                         continue;
                     }
 
-                    //ServerMod.getGameInstance().getWorldManager(dimension).setBlockWithNotify(x, y, z, chunk.getBlockId(x & 15, y & 15, z & 15));
-                    if (chunk.blocks == null)
-                        System.out.println("OH NO!! blocks = null");
-
                     int blockID = chunk.getBlockId(x & 15, y & 15, z & 15);
                     int metadata = chunk.getBlockMetadata(x & 15, y & 15, z & 15);
-                    ServerMod.getGameInstance().getWorldManager(dimension).setBlockAndMetadataWithNotify(x, y, z, blockID, metadata);
+                    ServerMod.getGameInstance().getWorldManager(dimension).setBlockAndMetadata(x, y, z, blockID, metadata);
 
                     TileEntity tileEntity = chunk.getChunkBlockTileEntity(x & 15, y & 15, z & 15);
                     if (tileEntity != null)
                         ServerMod.getGameInstance().getWorldManager(dimension).setBlockTileEntity(x, y, z, tileEntity);
-
-                    //ServerMod.getGameInstance().getWorldManager(dimension).addLoadedTileEntities(chunk.worldObj.loadedTileEntityList);
                 }
             }
         }
 
-        //
         getChunkFromWorldFolder.cache = new LinkedHashMap<>();
         getChunkFromWorldFolder.zipFileRegionDir = null;
+
+        if (isZipFile) {
+            try {
+                DeleteDirectory.deleteDirectory(tmpFolderName);
+            } catch (IOException ee) {
+                ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + "Failed to delete directory: " + tmpFolderName);
+                throw ee;
+            }
+        }
 
         return backupMissingSomeChunk;
     }
