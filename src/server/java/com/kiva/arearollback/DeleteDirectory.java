@@ -20,4 +20,16 @@ public class DeleteDirectory {
                 .map(Path::toFile)
                 .forEach(File::delete);
     }
+
+    public static void deleteFilesInDirectory(Path path) throws IOException {
+        if (!path.toFile().exists())
+            return;
+
+        File[] files = path.toFile().listFiles();
+        if (files == null)
+            return;
+
+        for (File f : files)
+            f.delete();
+    }
 }

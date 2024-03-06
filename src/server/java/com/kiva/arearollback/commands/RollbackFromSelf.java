@@ -34,7 +34,7 @@ public class RollbackFromSelf extends CommandCompat {
             return;
         }
 
-        ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rolling back" + (AreaRollbackServer.flipDimensionForRollbacks ? " (dimension flipped)" : "") + " this halts the server until finished");
+        ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rolling back" + (AreaRollbackServer.flipDimensionForRollbacks ? " (dimension flipped)" : "") + ", this halts the server until finished");
         commandExecutor.displayChatMessage(ChatColors.GREEN + "Rolling back " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "...");
 
         long start = System.currentTimeMillis();

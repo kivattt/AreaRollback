@@ -78,7 +78,7 @@ public class Rollback extends CommandCompat {
                 return;
             }
 
-            ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rolling back" + (AreaRollbackServer.flipDimensionForRollbacks ? " (dimension flipped)" : "") + " this halts the server until finished");
+            ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rolling back" + (AreaRollbackServer.flipDimensionForRollbacks ? " (dimension flipped)" : "") + ", this halts the server until finished");
             commandExecutor.displayChatMessage(ChatColors.GREEN + "Rolling back " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "...");
 
             long start = System.currentTimeMillis();
@@ -139,7 +139,8 @@ public class Rollback extends CommandCompat {
                 if (e instanceof FileAlreadyExistsException) {
                     // This should only happen if the server was killed before we had the chance to delete the temp folder
                     try {
-                        DeleteDirectory.deleteDirectory(tmpFolderName);
+                        // Delete the files in here to prevent using old temp files
+                        DeleteDirectory.deleteFilesInDirectory(tmpFolderName);
                     } catch(IOException ee) {
                         ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + "Failed to delete directory: " + tmpFolderName);
                         throw ee;
