@@ -51,6 +51,12 @@ public class Rollback extends CommandCompat {
             return;
         }
 
+        if (args.length >= 2 && args[1].isEmpty()) {
+            commandExecutor.displayChatMessage(ChatColors.RED + "You can't use an empty backup name");
+            commandExecutor.displayChatMessage(ChatColors.RED + "(You probably typed 2 spaces in the command)");
+            return;
+        }
+
         if (args.length == 1) {
             commandExecutor.displayChatMessage(ChatColors.AQUA + "Backups available:");
             for (String folder : backups.folders)
@@ -66,11 +72,6 @@ public class Rollback extends CommandCompat {
 
         if (args.length == 2) {
             String backupSelected = args[1];
-            if (backupSelected.isEmpty()) {
-                commandExecutor.displayChatMessage(ChatColors.RED + "You can't use an empty backup name");
-                commandExecutor.displayChatMessage(ChatColors.RED + "(You probably typed 2 spaces in the command)");
-                return;
-            }
 
             if (!backups.folders.contains(backupSelected) && !backups.zipFiles.contains(backupSelected)) {
                 commandExecutor.displayChatMessage(ChatColors.RED + "That backup does not exist!");
@@ -86,7 +87,7 @@ public class Rollback extends CommandCompat {
             try {
                 backupMissingSomeChunk = doRollback(backupSelected, netPlayerController, ServerMod.toEntityPlayerMP(commandExecutor).dimension);
             } catch (IOException e) {
-                commandExecutor.displayChatMessage(ChatColors.RED + "Failed to create or delete temporary folder for unzipping files");
+                commandExecutor.displayChatMessage(ChatColors.RED + "Failed to create/delete temporary folder for unzipping files");
                 return;
             }
             long end = System.currentTimeMillis();

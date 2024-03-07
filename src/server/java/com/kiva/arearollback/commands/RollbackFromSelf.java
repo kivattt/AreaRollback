@@ -42,9 +42,11 @@ public class RollbackFromSelf extends CommandCompat {
         try {
             backupMissingSomeChunk = doRollbackFromSelf(netPlayerController, ServerMod.toEntityPlayerMP(commandExecutor).dimension);
         } catch (IOException e) {
-            commandExecutor.displayChatMessage(ChatColors.RED + "Failed to create or delete temporary folder for unzipping files");
+            commandExecutor.displayChatMessage(ChatColors.RED + "Unknown file IO error during rollback, check console");
+            e.printStackTrace();
             return;
         }
+
         long end = System.currentTimeMillis();
         long duration = end - start;
 
@@ -52,7 +54,7 @@ public class RollbackFromSelf extends CommandCompat {
         commandExecutor.displayChatMessage(ChatColors.GREEN + "Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "performed in " + ChatColors.RESET + duration + ChatColors.GREEN + " milliseconds");
 
         if (backupMissingSomeChunk)
-            commandExecutor.displayChatMessage(ChatColors.RED + "Some chunks not found in the backup were untouched");
+            commandExecutor.displayChatMessage(ChatColors.RED + "Some chunks not found were untouched");
 
         commandExecutor.displayChatMessage(ChatColors.YELLOW + "Re-join the server to see the changes!");
     }
