@@ -16,10 +16,14 @@ import java.io.InputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -37,22 +41,20 @@ public class GetChunkFromWorldFolder {
     static final byte[] chunkDataArray = new byte[CHUNK_SIZE_DATA];
 
     public LinkedHashMap<File, SoftReference<ThreegionFile>> cache = new LinkedHashMap<>();
-    public String zipFileRegionDir = null;
+    public String folderRegionDir = null;
 
     // Takes in a chunk XYZ
-    public Chunk getChunkFromRegionFolder(int dimension, boolean fromSelf, File backupPath, boolean isZipFile, int x, int y, int z) {
+    public Chunk getChunkFromRegionFolder(int dimension, boolean fromSelf, File backupPath, boolean isZipFile, int x, int y, int z) throws IOException {
         ThreegionFile threegion;
         if (fromSelf)
             threegion = getFileForXYZFromSelf(dimension, x, y, z);
         else
             threegion = getFileForXYZ(dimension, backupPath, isZipFile, x, y, z);
 
-        if (threegion == null)
-            return null;
+        if (threegion == null) return null;
 
         DataInputStream distream = threegion.getChunkDataInputStream(x & 7, y & 7, z & 7);
-        if (distream == null)
-            return null;
+        if (distream == null) return null;
 
         NBTTagCompound nbt;
         try {
@@ -77,7 +79,47 @@ public class GetChunkFromWorldFolder {
         return chunk;
     }
 
-    public String findRegionDirNameInZipFile(ZipFile zipFile, String regionDirName) {
+    public String getPathWithFewestSlashes(String a, String b) {
+        if (a.chars().filter(c -> c == '/').count() < b.chars().filter(c -> c == '/').count())
+            return a;
+        return b;
+    }
+
+    public String findRegionDirNameInFolder(File folder, String regionDirName) throws IOException {
+        String entryNameClosestToRoot = null;
+
+        List<Path> files;
+        Stream<Path> walk = Files.walk(folder.toPath());
+            files = walk.filter(Files::isDirectory)
+                    .collect(Collectors.toList());
+
+        for (Path path : files) {
+            File f = path.toFile();
+
+            // Strip the last '/' so endsWith will match regionDirName
+            String entryName = f.getAbsolutePath();
+            if (entryName.charAt(entryName.length() - 1) == '/')
+                entryName = entryName.substring(0, entryName.length() - 1);
+
+            if (!entryName.endsWith(regionDirName))
+                continue;
+
+            if (entryNameClosestToRoot == null) {
+                entryNameClosestToRoot = entryName;
+                continue;
+            }
+
+            // We want the closest match to the zip root, so we don't get false-positives for server folders if they're inside the folder
+            entryNameClosestToRoot = getPathWithFewestSlashes(entryName, entryNameClosestToRoot);
+        }
+
+        if (entryNameClosestToRoot == null)
+            throw new RegionDirNotFoundException();
+
+        return entryNameClosestToRoot;
+    }
+
+    public String findRegionDirNameInZipFile(ZipFile zipFile, String regionDirName) throws RegionDirNotFoundException {
         String entryNameClosestToRoot = null;
 
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
@@ -91,20 +133,25 @@ public class GetChunkFromWorldFolder {
             if (entryName.charAt(entryName.length() - 1) == '/')
                 entryName = entryName.substring(0, entryName.length() - 1);
 
-            if (entryName.endsWith(regionDirName)) {
-                if (entryNameClosestToRoot == null)
-                    entryNameClosestToRoot = entryName;
+            if (!entryName.endsWith(regionDirName))
+                continue;
 
-                // We want the closest match to the zip root, so we don't get false-positives for server folders if they're inside the zipFile
-                if (entryName.chars().filter(c -> c == '/').count() < entryNameClosestToRoot.chars().filter(c -> c == '/').count())
-                    entryNameClosestToRoot = entryName;
+            if (entryNameClosestToRoot == null) {
+                entryNameClosestToRoot = entryName;
+                continue;
             }
+
+            // We want the closest match to the zip root, so we don't get false-positives for server folders if they're inside the zipFile
+            entryNameClosestToRoot = getPathWithFewestSlashes(entryName, entryNameClosestToRoot);
         }
+
+        if (entryNameClosestToRoot == null)
+            throw new RegionDirNotFoundException();
 
         return entryNameClosestToRoot;
     }
 
-    public ThreegionFile getFileForXYZ(int dimension, File backupPath, boolean isZipFile, int x, int y, int z) {
+    public ThreegionFile getFileForXYZ(int dimension, File backupPath, boolean isZipFile, int x, int y, int z) throws IOException {
         String regionDirName = "world" + (dimension != 0 ? "/DIM-1" : "") + "/region";
         String regionFileName = "r." + (x >> 3) + "." + (y >> 3) + "." + (z >> 3) + ".r3";
 
@@ -121,14 +168,8 @@ public class GetChunkFromWorldFolder {
             File tmpRegionFile = new File(AreaRollbackServer.config.temporaryDirForUnzippedFiles + "/" + regionFileName);
 
             if (!tmpRegionFile.exists()) {
-                // Recursively search for the regionDirName, since it could have parent folders if the user zipped a folder
-                zipFileRegionDir = findRegionDirNameInZipFile(zipFile, regionDirName);
-
-                // TODO: Region directory not found in zipFile, this error should be reported to the player! But right here it would spam...
-                if (zipFileRegionDir == null) {
-                    //ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + "Could not find region directory " + regionDirName + "in " + zipFile.getName());
-                    return null;
-                }
+                // Recursively search for the regionDirName, since it could have parent folders
+                String zipFileRegionDir = findRegionDirNameInZipFile(zipFile, regionDirName);
 
                 ZipEntry regionFileEntry = zipFile.getEntry(zipFileRegionDir + "/" + regionFileName);
                 if (regionFileEntry == null)
@@ -150,7 +191,11 @@ public class GetChunkFromWorldFolder {
                 threegion = tmpRegionFile;
             }
         } else if (backupPath.isDirectory()) {
-            threegion = new File(backupPath.getAbsolutePath() + "/" + regionDirName + "/" + regionFileName);
+            // Recursively search for the regionDirName, since it could have parent folders
+            if (folderRegionDir == null)
+                folderRegionDir = findRegionDirNameInFolder(backupPath, regionDirName);
+
+            threegion = new File(folderRegionDir + "/" + regionFileName);
         } else {
             return null; // Not a directory or .zip file
         }

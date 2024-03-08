@@ -87,7 +87,12 @@ public class Rollback extends CommandCompat {
             try {
                 backupMissingSomeChunk = doRollback(backupSelected, netPlayerController, ServerMod.toEntityPlayerMP(commandExecutor).dimension);
             } catch (IOException e) {
-                commandExecutor.displayChatMessage(ChatColors.RED + "Failed to create/delete temporary folder for unzipping files");
+                if (e instanceof RegionDirNotFoundException) {
+                    ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + "No region folder found in backup");
+                    commandExecutor.displayChatMessage(ChatColors.RED + "No region folder found in backup");
+                } else {
+                    commandExecutor.displayChatMessage(ChatColors.RED + "Failed to create/delete temporary folder for unzipping files");
+                }
                 return;
             }
             long end = System.currentTimeMillis();
@@ -96,8 +101,10 @@ public class Rollback extends CommandCompat {
             ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? "(dimension flipped) " : "") + "performed in " + duration + " milliseconds");
             commandExecutor.displayChatMessage(ChatColors.GREEN + "Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "performed in " + ChatColors.RESET + duration + ChatColors.GREEN + " milliseconds");
 
-            if (backupMissingSomeChunk)
+            if (backupMissingSomeChunk) {
+                ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Some chunks not found in the backup were untouched");
                 commandExecutor.displayChatMessage(ChatColors.RED + "Some chunks not found in the backup were untouched");
+            }
 
             commandExecutor.displayChatMessage(ChatColors.YELLOW + "Re-join the server to see the changes!");
 
@@ -182,7 +189,7 @@ public class Rollback extends CommandCompat {
         }
 
         getChunkFromWorldFolder.cache = new LinkedHashMap<>();
-        getChunkFromWorldFolder.zipFileRegionDir = null;
+        getChunkFromWorldFolder.folderRegionDir = null;
 
         if (isZipFile) {
             try {

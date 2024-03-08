@@ -53,8 +53,10 @@ public class RollbackFromSelf extends CommandCompat {
         ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? "(dimension flipped) " : "") + "performed in " + duration + " milliseconds");
         commandExecutor.displayChatMessage(ChatColors.GREEN + "Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "performed in " + ChatColors.RESET + duration + ChatColors.GREEN + " milliseconds");
 
-        if (backupMissingSomeChunk)
+        if (backupMissingSomeChunk) {
+            ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Some chunks not found were untouched");
             commandExecutor.displayChatMessage(ChatColors.RED + "Some chunks not found were untouched");
+        }
 
         commandExecutor.displayChatMessage(ChatColors.YELLOW + "Re-join the server to see the changes!");
     }
