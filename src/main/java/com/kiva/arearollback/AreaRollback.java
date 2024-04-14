@@ -4,7 +4,7 @@ import com.fox2code.foxloader.loader.Mod;
 
 public class AreaRollback extends Mod {
     public static final String loggingPrefix = "[AreaRollback] ";
-    public static final String version = "0.0.4";
+    public static final String version = "0.1.0";
 
     @Override
     public void onPreInit() {

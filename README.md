@@ -77,7 +77,7 @@ You may want to rollback twice to make sure blocks like torches are placed corre
 I haven't experimented with any way to circumvent this, but I suspect it might be impossible without \
 changing a lot of ReIndev source code.
 
-Rolling back can cause blocks (pre or post rollback) like torches, crates and chests to drop items, potentially duplicating items
+Rolling back can cause blocks (pre- or post-rollback) like torches, crates and chests to drop items, potentially duplicating items
 
 ## Technical notes
 The reason you have to re-join the server to see the changes after a rollback is because we don't use `setBlockAndMetadataWithNotify`. \
@@ -86,6 +86,6 @@ notice they're in an unfinished portal, and then replace themselves with air.
 
 ## TODOs (sorted by priority)
 - Add a toggle command for including entities in rollbacks
-- Conditionally use `setBlockAndMetadataWithNotify` or `setBlockAndMetadata` based on if block implements `onNeighborBlockChange` (reflection)
+- Conditionally use `setBlockAndMetadataWithNotify` or `setBlockAndMetadata` based on if block implements `onNeighborBlockChange` (reflection?)
 - (Maybe...) Allow relative paths in config, have to check File::isAbsolute and add `areaRollbackBasePath`
 - ^ Otherwise, consider adding a command to flip between `setBlockAndMetadataWithNotify` and `setBlockAndMetadata`
