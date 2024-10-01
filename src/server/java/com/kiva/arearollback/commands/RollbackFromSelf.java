@@ -1,5 +1,6 @@
 package com.kiva.arearollback.commands;
 
+import com.fox2code.foxloader.loader.ModLoader;
 import com.fox2code.foxloader.loader.ServerMod;
 import com.fox2code.foxloader.network.ChatColors;
 import com.fox2code.foxloader.network.NetworkPlayer;
@@ -37,6 +38,8 @@ public class RollbackFromSelf extends CommandCompat {
         ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rolling back" + (AreaRollbackServer.flipDimensionForRollbacks ? " (dimension flipped)" : "") + ", this halts the server until finished");
         commandExecutor.displayChatMessage(ChatColors.GREEN + "Rolling back " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "...");
 
+        ModLoader.Internal.watchdogTimer.setEnabled(false);
+        
         long start = System.currentTimeMillis();
         boolean backupMissingSomeChunk;
         try {
@@ -49,6 +52,8 @@ public class RollbackFromSelf extends CommandCompat {
 
         long end = System.currentTimeMillis();
         long duration = end - start;
+
+        ModLoader.Internal.watchdogTimer.setEnabled(true);
 
         ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? "(dimension flipped) " : "") + "performed in " + duration + " milliseconds");
         commandExecutor.displayChatMessage(ChatColors.GREEN + "Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? (ChatColors.RED + "(dimension flipped) " + ChatColors.GREEN) : "") + "performed in " + ChatColors.RESET + duration + ChatColors.GREEN + " milliseconds");
