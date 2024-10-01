@@ -101,6 +101,7 @@ public class Rollback extends CommandCompat {
             long end = System.currentTimeMillis();
             long duration = end - start;
 
+            ModLoader.Internal.watchdogTimer.heartbeat();
             ModLoader.Internal.watchdogTimer.setEnabled(true);
 
             ServerMod.getGameInstance().logWarning(AreaRollbackServer.loggingPrefix + commandExecutor.getPlayerName() + ": Rollback " + (AreaRollbackServer.flipDimensionForRollbacks ? "(dimension flipped) " : "") + "performed in " + duration + " milliseconds");
